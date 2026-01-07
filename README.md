@@ -1,5 +1,4 @@
-````md
-# GitHub REST API Proxy (Non-fork Repositories + Branches)
+# GitHub REST API Proxy 
 
 A small Spring Boot 4 (Spring MVC) application that acts as a proxy to the GitHub REST API v3.  
 It exposes a single endpoint that returns **all repositories of a given GitHub user that are not forks**, including repository owner login and branch details (branch name + last commit SHA).
