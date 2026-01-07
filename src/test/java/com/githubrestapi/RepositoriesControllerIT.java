@@ -16,6 +16,7 @@ import org.springframework.http.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.util.StopWatch;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,7 +32,9 @@ public class RepositoriesControllerIT {
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
+
         registry.add("github.base-url", wireMockServer::baseUrl);
+        registry.add("spring.mvc.servlet.load-on-startup", () -> "1");
     }
 
     @BeforeAll
@@ -47,41 +50,82 @@ public class RepositoriesControllerIT {
     @BeforeEach
     void beforeEach() {
         wireMockServer.resetAll();
+        configureFor("localhost", wireMockServer.port());
     }
 
     @Test
     void shouldReturnOnlyNonForkReposWithBranchesAndLastCommitSha() {
-        wireMockServer.stubFor(get(urlPathEqualTo("/users/TheSoftwareHouse/repos"))
-                .willReturn(okJson("""
+        wireMockServer.stubFor(get(urlPathEqualTo("/users/Forzik51/repos"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                        .withFixedDelay(1000)
+                        .withBody(
+                        """
                         [
-                          {"name":"API-Platform-webinar","fork":false,"owner":{"login":"TheSoftwareHouse"}},
-                          {"name":"docker-openvpn","fork":true,"owner":{"login":"TheSoftwareHouse"}}
+                            {"name":"repo-a","fork":false,"owner":{"login":"Forzik51"}},
+                            {"name":"repo-b","fork":false,"owner":{"login":"Forzik51"}},
+                            {"name":"repo-fork","fork":true,"owner":{"login":"Forzik51"}}
                         ]
                         """)));
 
-        wireMockServer.stubFor(get(urlPathEqualTo("/repos/TheSoftwareHouse/API-Platform-webinar/branches"))
-                .willReturn(okJson("""
+        wireMockServer.stubFor(get(urlPathEqualTo("/repos/Forzik51/repo-a/branches"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                        .withFixedDelay(1000)
+                        .withBody(
+                        """
                         [
-                          {"name":"master","commit":{"sha":"b6370f3e881a543ed0c283ae3e13aeb59f3e279d"}}
+                            {"name":"master","commit":{"sha":"sha-a-1"}},
+                            {"name":"develop","commit":{"sha":"sha-a-2"}},
+                            {"name":"release","commit":{"sha":"sha-a-3"}}
                         ]
                         """)));
+
+        wireMockServer.stubFor(get(urlPathEqualTo("/repos/Forzik51/repo-b/branches"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                        .withFixedDelay(1000)
+                        .withBody(
+                                """
+                                [
+                                    {"name":"master","commit":{"sha":"sha-b-1"}},
+                                    {"name":"develop","commit":{"sha":"sha-b-2"}},
+                                    {"name":"release","commit":{"sha":"sha-b-3"}}
+                                ]
+                                """)));
+
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
 
         ResponseEntity<RepositoryResponse[]> response =
-                http.getForEntity("/github/users/TheSoftwareHouse/repositories", RepositoryResponse[].class);
+                http.getForEntity("/github/users/Forzik51/repositories", RepositoryResponse[].class);
+
+        stopWatch.stop();
+        long elapsedTime = stopWatch.getTotalTimeMillis();
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
 
         var repos = response.getBody();
-        assertThat(repos).hasSize(1);
+        assertThat(repos).hasSize(2);
 
-        assertThat(repos[0].repositoryName()).isEqualTo("API-Platform-webinar");
-        assertThat(repos[0].ownerLogin()).isEqualTo("TheSoftwareHouse");
-        assertThat(repos[0].branches()).hasSize(1);
+        assertThat(repos[0].repositoryName()).isEqualTo("repo-a");
+        assertThat(repos[0].ownerLogin()).isEqualTo("Forzik51");
+        assertThat(repos[0].branches()).hasSize(3);
+        assertThat(repos[1].branches()).hasSize(3);
 
         assertThat(repos[0].branches().get(0).name()).isIn("master");
-        assertThat(repos[0].branches().stream().map(BranchResponse::lastCommitSha))
-                .containsExactlyInAnyOrder("b6370f3e881a543ed0c283ae3e13aeb59f3e279d");
+
+        verify(3, getRequestedFor(urlMatching(".*")));
+
+        System.out.println("time: "+elapsedTime);
+
+        assertThat(elapsedTime)
+                .isGreaterThan(2000L)
+                .isLessThan(3000L);
     }
 
     @Test

@@ -23,7 +23,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-restclient")
 
     implementation("org.springframework.boot:spring-boot-starter-webmvc-test")
-
+    testImplementation("org.apache.commons:commons-lang3:3.14.0")
     testImplementation("org.wiremock:wiremock-standalone:3.13.0")
 }
 

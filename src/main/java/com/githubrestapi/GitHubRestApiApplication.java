@@ -7,11 +7,19 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClient;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 @SpringBootApplication
 public class GitHubRestApiApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(GitHubRestApiApplication.class, args);
+    }
+
+    @Bean(destroyMethod = "shutdown")
+    ExecutorService githubExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
     }
 
     @Bean
@@ -21,5 +29,7 @@ public class GitHubRestApiApplication {
                 .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")
                 .build();
     }
+
+
 
 }
